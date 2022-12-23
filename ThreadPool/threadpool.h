@@ -8,6 +8,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <functional>
+#include <unordered_map>
 
 
 // Any 类型：可以接受任意类型数据
@@ -92,14 +93,18 @@ enum class PoolMode {
 
 class Thread {
 public:
-	using ThreadFunc = std::function<void(void)>;
+	using ThreadFunc = std::function<void(int)>;
 	Thread(ThreadFunc func);
 	~Thread();
 
 	// 启动线程
 	void start();
+	// 获取线程 ID
+	int getId() const;
 private:
 	ThreadFunc m_func;
+	static int m_generateId;
+	int m_threadId; // 保存线程 ID
 	
 };
 
@@ -112,21 +117,26 @@ public:
 	void setMode(PoolMode mode); 
 	// 设置线程池任务队列上限阈值
 	void setTaskQueThreshold(int threshold);
-
+	// 设置线程池CACHED模式下线程上限阈值
+	void setThreadSizeThreshold(int threshold);
 	// 给线程池提交任务
 	Result submitTask(std::shared_ptr<Task> task);
 	// 开启线程池
-	void start(int initThreadSize = 4);
+	void start(int initThreadSize = std::thread::hardware_concurrency());
 
 	ThreadPool(const ThreadPool&) = delete;
 	ThreadPool& operator=(const ThreadPool&) = delete; 
 private:
 	// 线程函数
-	void threadFunc();
+	void threadFunc(int threadId);
 	bool checkPoolState() const;
 public:
-	std::vector<std::unique_ptr<Thread>> m_threads; // 线程列表
+	//std::vector<std::unique_ptr<Thread>> m_threads; // 线程列表
+	std::unordered_map<int, std::unique_ptr<Thread>> m_threads;
 	size_t m_initThreadSize; // 初始线程数
+	int m_threadMaxThreshold; // 线程上限阈值
+	std::atomic_size_t m_curThreadSize; // 实时线程数
+	std::atomic_int m_idleThreadSize; // 记录空闲线程数量
 
 	std::queue<std::shared_ptr<Task>> m_taskQue; // 任务队列
 	std::atomic_int m_taskSize; // 任务的数量
@@ -135,11 +145,12 @@ public:
 	std::mutex m_taskQueMtx; // 保证任务队列的安全
 	std::condition_variable m_notFull; // 保证任务队列不满
 	std::condition_variable m_notEmpty; // 保证任务队列不空
+	std::condition_variable m_exitCond; // 等待线程资源全部回收
 
 	PoolMode m_mode; // 当前线程池模式
 	std::atomic_bool m_isPoolRunning; // 当前线程池运行状态
 
-	std::atomic_int m_idleThreadSize; // 记录空闲线程数量
+	
 };
 
 #endif
