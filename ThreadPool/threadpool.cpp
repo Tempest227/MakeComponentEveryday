@@ -23,8 +23,9 @@ ThreadPool::ThreadPool()
 ThreadPool::~ThreadPool() {
 	m_isPoolRunning = false;
 	// 线程状态 ： 阻塞和执行任务
-	m_notEmpty.notify_all();
+	
 	std::unique_lock<std::mutex> lock(m_taskQueMtx);
+	m_notEmpty.notify_all();
 	m_exitCond.wait(lock, [&]()->bool { return m_curThreadSize == 0; });
 }
 
@@ -91,7 +92,8 @@ void ThreadPool::threadFunc(int threadId) {
 	/*std::cout << "begin threadFunc tid: " << std::this_thread::get_id() << std::endl;
 	std::cout << "end threadFunc tid: " << std::this_thread::get_id() << std::endl;*/
 	auto lastTime = std::chrono::high_resolution_clock().now();
-	while (m_isPoolRunning) {
+	// 所有任务必须全部执行完成，线程池才回收
+	for (;;) {
 		std::shared_ptr<Task> task;
 		{
 			// 获取锁
@@ -102,6 +104,12 @@ void ThreadPool::threadFunc(int threadId) {
 			
 			// 怎么判断是超时返回，还是有任务待执行返回
 			while (m_taskSize == 0) {
+				// 线程池结束，回收线程资源
+				if (!m_isPoolRunning) { 
+					m_threads.erase(threadId);
+					m_exitCond.notify_all();
+					return;
+				}
 				if (m_mode == PoolMode::MODE_CACHED) {
 					if (std::cv_status::timeout == m_notEmpty.wait_for(lock, std::chrono::seconds(1))) {
 						auto now = std::chrono::high_resolution_clock().now();
@@ -122,12 +130,12 @@ void ThreadPool::threadFunc(int threadId) {
 					// 等待 m_notEmpty 条件
 					m_notEmpty.wait(lock);
 				}
-				if (!m_isPoolRunning) {
+				/*if (!m_isPoolRunning) {
 					m_threads.erase(threadId);
 					m_curThreadSize--;
 					m_idleThreadSize--;
 					m_exitCond.notify_all();
-				}
+				}*/
 			}
 
 			m_idleThreadSize--;
@@ -153,8 +161,7 @@ void ThreadPool::threadFunc(int threadId) {
 		m_idleThreadSize++;
 		lastTime = std::chrono::high_resolution_clock().now(); // 线程执行完任务的时间
 	}
-	m_threads.erase(threadId);
-	m_exitCond.notify_all();
+
 
 }
 
@@ -181,16 +188,20 @@ int Thread::getId() const { return m_threadId; }
 
 //////////////////////// 信号量实现
 
-Semaphore::Semaphore(int limit) : m_limit(0) {}
-Semaphore::~Semaphore() {}
+Semaphore::Semaphore(int limit) : m_limit(0), m_isExit(false) {}
+Semaphore::~Semaphore() {
+	m_isExit = true;
+}
 
 void Semaphore::wait() {
+	if (m_isExit) return;
 	std::unique_lock<std::mutex> lock(m_mtx);
 	m_cond.wait(lock, [&]()->bool {return m_limit > 0;});
 	m_limit--;
 }
 
 void Semaphore::post() {
+	if (m_isExit) return;
 	std::unique_lock<std::mutex> lock(m_mtx);
 	m_limit++;
 	m_cond.notify_all();

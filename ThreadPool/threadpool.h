@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <functional>
 #include <unordered_map>
+#include <thread>
 
 
 // Any 类型：可以接受任意类型数据
@@ -66,6 +67,7 @@ public:
 	void post();
 private:
 	int m_limit;
+	std::atomic_bool m_isExit;
 	std::mutex m_mtx;
 	std::condition_variable m_cond;
 };
