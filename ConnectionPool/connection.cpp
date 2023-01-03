@@ -38,6 +38,6 @@ MYSQL_RES* Connection::query(std::string sql) {
 	return mysql_use_result(m_conn);
 }
 
-clock_t Connection::getTime() const { return m_time; }
+time_t Connection::getTime() const { return m_time; }
 
-void Connection::setTime(const clock_t time) { m_time = time; }
+void Connection::setTime(const time_t time) { m_time = time; }

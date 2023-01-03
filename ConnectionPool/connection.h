@@ -19,10 +19,10 @@ public:
 	bool update(std::string sql);
 	// 查询操作 select
 	MYSQL_RES* query(std::string sql);
-	clock_t getTime() const;
-	void setTime(const clock_t time);
+	time_t getTime() const;
+	void setTime(const time_t time);
 private:
 	MYSQL* m_conn; // 表示和MySQL Server的一条连接
-	clock_t m_time;
+	time_t m_time;
 	
 };
