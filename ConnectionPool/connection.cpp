@@ -8,7 +8,6 @@
 
 Connection::Connection() {
 	m_conn = mysql_init(nullptr);
-	m_time = time(0);
 }
 // 释放数据库连接资源
 Connection::~Connection() {
@@ -38,6 +37,6 @@ MYSQL_RES* Connection::query(std::string sql) {
 	return mysql_use_result(m_conn);
 }
 
-time_t Connection::getTime() const { return m_time; }
+time_t Connection::getAliveTime() const { return time(0) - m_aliveTime; }
 
-void Connection::setTime(const time_t time) { m_time = time; }
+void Connection::refreshAliveTime() { m_aliveTime = time(0); }
